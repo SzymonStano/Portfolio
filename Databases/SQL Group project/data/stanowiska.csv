@@ -1,0 +1,13 @@
+Id,Nazwa,Pensja_min,Pensja_max,Pensja_ustalona
+1,Mechanik samochodowy,55000,60000,57500
+2,Elektromechanik,62500,67500,65000
+3,Blacharz samochodowy,52500,57500,55000
+4,Lakiernik samochodowy,52500,57500,55000
+5,Specjalista ds. klimatyzacji,62500,67500,65000
+6,Wulkanizator,42500,47500,45000
+7,Tapicer samochodowy,47500,52500,50000
+8,Kierownik warsztatu,77500,82500,80000
+9,Recepcjonista,35000,40000,37500
+10,Magazynier,35000,40000,37500
+11,Osoba sprzatajaca,32500,37500,35000
+12,Pracownik myjni/detailingu,35000,40000,37500

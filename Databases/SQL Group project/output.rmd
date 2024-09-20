@@ -1,0 +1,585 @@
+---
+title: 'Baza danych dla warsztatu „Pimp My Wheels" - raport'
+author: "Grupa G: Kamila Grząka, Jakub Kempa, Szymon Stano, Julia Wołk-Łaniewska, Agata Żabska"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  pdf_document:
+    toc: true
+    number_sections: true
+lang: pl
+geometry: margin=0.8in
+---
+
+```{r echo = FALSE, message = FALSE, warning= FALSE, include = FALSE}
+library(reticulate)
+virtualenv_create("myenv")
+use_virtualenv("myenv", required = TRUE)
+py_install("numpy")
+py_install("matplotlib")
+py_install("mysql-connector-python")
+py_install("pandas")
+py_install("seaborn")
+py_install("python-dateutil")
+py_install("datetime")
+py_install("tabulate")
+```
+
+```{python echo=FALSE}
+# Wykorzystane biblioteki
+import numpy as np
+import matplotlib.pyplot as plt
+import mysql.connector
+import pandas as pd
+import seaborn as sns
+from dateutil import parser
+from datetime import date
+from dateutil.relativedelta import relativedelta
+from tabulate import tabulate
+```
+
+```{r echo = FALSE}
+library(kableExtra)
+```
+
+```{python echo=FALSE}
+# Połączenie z serwerem
+
+con = mysql.connector.connect(
+  host = "giniewicz.it",
+    user = "team08",
+    password = "te@m24ob",
+    database = "team08"
+)
+```
+
+\newpage
+
+# Analiza danych
+
+## Odsetek naprawianych marek pojazdów
+Warsztat „Pimp My Wheels" ma szeroką gamę klientów, a co za tym idzie - pracuje z wieloma różnymi markami samochodów i motocykli. Wykres słupkowy zamieszczony poniżej przedstawia 50 najczęściej naprawianych marek pojazdów w naszej firmie.
+
+```{python echo=FALSE}
+mycursor = con.cursor()
+
+mycursor.execute('SELECT Naprawy_Pojazdy.marka, (COUNT(Naprawy_Pojazdy.marka)*100/(SELECT COUNT(*) FROM Naprawy)) AS percentage FROM Naprawy_Pojazdy INNER JOIN Naprawy ON Naprawy_Pojazdy.id = Naprawy.id_pojazdu GROUP BY marka')
+
+myresult = mycursor.fetchall()
+
+for i, row in enumerate(myresult):
+    myresult[i] = (row[0], round(row[1], 2))
+
+
+df = pd.DataFrame(myresult, columns=["Marka", "Odsetek"])
+
+df_grouped = df.groupby('Odsetek')['Marka'].apply(', '.join).reset_index()
+df_grouped = df_grouped.sort_values(by="Odsetek", ascending=False)
+df["Odsetek"] = df["Odsetek"].astype(float)
+
+
+top_num2 = 50
+top_20_brands = df.sort_values(by="Odsetek", ascending=False).head(top_num2)
+
+
+fig, ax = plt.subplots(figsize=(22,8))
+sns.barplot(data=top_20_brands, x='Marka', y='Odsetek', color='b', alpha=0.7)
+ax.set_xlabel('Marka')
+ax.set_ylabel('Odsetek [%]')
+ax.set_title(f'Odsetek naprawianych marek dla {top_num2} najczęściej naprawianych marek pojazdów')
+ax.set_xticklabels(top_20_brands['Marka'], rotation=70)
+ax.grid(True)
+fig.tight_layout()
+plt.show()
+```
+
+
+Poniższa tabela natomiast przedstawia 10 najczęściej naprawianych marek w naszym warsztacie wraz z ich odsetkiem.
+
+
+```{python echo=FALSE}
+top_num = 10
+top_brands = df.sort_values(by="Odsetek", ascending=False).head(top_num)
+```
+
+
+```{r echo = FALSE}
+df_r<- py$top_brands
+knitr::kable(df_r, "latex", booktabs = T) %>% kable_styling(font_size = 8, latex_options = "HOLD_position")
+```
+
+## Miesięczna liczba naprawianych pojazdów
+
+```{python echo = FALSE}
+mycursor = con.cursor()
+mycursor.execute('SELECT data_rozpoczecia, data_zakonczenia FROM Naprawy')
+myresult = mycursor.fetchall()
+
+max_date = date.today()
+dates_dict = {}
+
+for start_date, end_date in myresult:
+    start_date = start_date  
+    end_date = end_date if end_date else max_date
+    current_date = start_date
+
+    while current_date.strftime('%Y-%m') <= end_date.strftime('%Y-%m'):
+        if current_date.strftime('%Y-%m') in dates_dict:
+            dates_dict[current_date.strftime('%Y-%m')] += 1
+        else:
+            dates_dict[current_date.strftime('%Y-%m')] = 1
+        current_date += relativedelta(months=1)
+
+sorted_dict = dict(sorted(dates_dict.items()))
+
+columns = ['Data', 'Naprawy']
+df = pd.DataFrame(list(sorted_dict.items()), columns=columns)
+df["Naprawy"] = df["Naprawy"].astype(float)
+
+
+fig, ax = plt.subplots(figsize=(12, 6))
+sns.barplot(data=df, x='Data', y='Naprawy', color='b', alpha=0.7)
+ax.set_xlabel('Data')
+ax.set_ylabel('Ilość napraw')
+ax.set_title('Ilość napraw w danym miesiącu')
+ax.set_xticklabels(df['Data'], rotation=70)
+ax.grid(True)
+fig.tight_layout()
+plt.show()
+```
+
+```{r echo = FALSE}
+df_r<- py$df
+knitr::kable(df_r, "latex", booktabs = T) %>% kable_styling(font_size = 8, latex_options = "HOLD_position")
+```
+
+
+```{python echo=FALSE}
+Naprawy = df['Naprawy']
+down = int(np.quantile(Naprawy, 0.4))
+up = int(np.quantile(Naprawy, 0.6))
+```
+
+
+```{python echo=FALSE}
+df = pd.DataFrame(list(sorted_dict.items()), columns=['Data', 'Naprawy'])
+
+min_naprawy_idx = df['Naprawy'].idxmin()
+max_naprawy_idx = df['Naprawy'].idxmax()
+
+min_month, min_amount = df.loc[min_naprawy_idx]
+max_month, max_amount = df.loc[max_naprawy_idx]
+```
+
+Jak możemy zauważyć średnio we wszystkich mięsiącach warsztat naprawia około `r py$down`-`r py$up` pojazdów. Dodatkowo największą i najmniejszą ilość napraw warsztat osiągnął odpowiednio w miesiącach: `r py$max_month`: `r py$max_amount` oraz `r py$min_month`: `r py$min_amount`.
+\newpage
+
+## Najlepsze okazje
+
+Nasz warsztat zajmuje się między innymi skupowaniem pojazdów, które następnie przechodzą renowację i są sprzedawane za odpowiednio wyższą cenę. W poniższej tabeli zawarliśmy najlepsze okazje, czyli 20 sprzedanych pojazdów, które przyniosły największy zysk dla firmy.
+
+```{python echo = FALSE}
+mycursor = con.cursor()
+mycursor.execute("WITH Koszt_Renowacji AS (SELECT Renowacje_Pojazdy.id AS id_pojazdu, Renowacje_Pojazdy.typ_pojazdu AS typ_pojazdu, Renowacje_Pojazdy.marka AS marka_pojazdu, Renowacje_Pojazdy.model AS model_pojazdu, SUM(Uslugi_Renowacji.koszt_uslugi) AS suma_kosztow_uslug FROM Renowacje_Pojazdy JOIN Renowacje ON Renowacje_Pojazdy.id = Renowacje.id_pojazdu JOIN Uslugi_Renowacji ON Renowacje.id = Uslugi_Renowacji.id_renowacji GROUP BY Renowacje_Pojazdy.id) SELECT kupno.id_pojazdu, Koszt_Renowacji.typ_pojazdu, Koszt_Renowacji.marka_pojazdu, Koszt_Renowacji.model_pojazdu, (sprzedaz.kwota - kupno.kwota - COALESCE(Koszt_Renowacji.suma_kosztow_uslug, 0)) AS zysk FROM (SELECT id_pojazdu, kwota FROM Kupno_Sprzedaz WHERE typ = 'kupno') AS kupno LEFT JOIN (SELECT id_pojazdu, kwota FROM Kupno_Sprzedaz WHERE typ = 'sprzedaz') AS sprzedaz ON kupno.id_pojazdu = sprzedaz.id_pojazdu LEFT JOIN Koszt_Renowacji ON kupno.id_pojazdu = Koszt_Renowacji.id_pojazdu ORDER BY zysk DESC LIMIT 20;")
+najlepsze_okazje = mycursor.fetchall()
+
+columns = ["Id pojazdu", "Typ", "Marka", "Model", "Zysk [USD]"]
+df = pd.DataFrame(najlepsze_okazje, columns=columns)
+df["Zysk [USD]"] = df["Zysk [USD]"].astype(float)
+``` 
+
+
+```{r echo = FALSE}
+df_r <- as.data.frame(py$df)
+knitr::kable(df_r, "latex", booktabs = T, longtable = T)
+```
+
+## Jakie narzędzia są potrzebne do wykonania poszczególnych usług?
+
+Nasz warsztat oferuje szereg usług, które wymagają specyficznych narzędzi oraz części samochodowych. Poniżej sporządziliśmy spis części, które są niezbędne do wykonania poszczególnych usług.
+
+```{python echo=FALSE}
+mycursor = con.cursor()
+mycursor.execute('''SELECT Uslugi.nazwa_uslugi, GROUP_CONCAT(Czesci.nazwa_czesci SEPARATOR ', ')
+                FROM Uslugi_Czesci INNER JOIN Uslugi ON Uslugi_Czesci.id_uslugi = Uslugi.id 
+                INNER JOIN Czesci ON Czesci.id = Uslugi_Czesci.id_czesci
+                GROUP BY Uslugi.nazwa_uslugi;''')
+                
+                
+myresult=mycursor.fetchall()
+    
+columns = ["Nazwa części", "Usługi"]
+df = pd.DataFrame(myresult, columns=columns)
+```
+
+```{r echo = FALSE}
+df_r<- py$df
+knitr::kable(df_r, "latex", longtable = T, booktabs = T, digits = 2) %>% kable_styling(font_size = 6)
+```
+
+
+
+## Jakie usługi są najpopularniejsze?
+
+Jak wyżej wspominaliśmy nasz warsztat oferuje szereg usług, aktualnie jest ich prawie 50. Poniżej sporządziliśmy ranking tych cieszących się największą popularnością, wraz z ilością ich wykonań od początku działalności warsztatu.
+
+```{python echo=FALSE}
+mycursor = con.cursor()
+mycursor.execute('''SELECT Uslugi.nazwa_uslugi, COUNT(id_uslugi) as ilosc
+                FROM Uslugi INNER JOIN Uslugi_Napraw ON Uslugi.id =   Uslugi_Napraw.id_uslugi
+                GROUP BY Uslugi.id
+                ORDER BY ilosc DESC;''')
+
+myresult=mycursor.fetchall()
+
+
+columns = ["Nazwa usługi", "Ilość wykonań"]
+df = pd.DataFrame(myresult, columns=columns)
+```
+
+```{r echo = FALSE}
+df_r <- as.data.frame(py$df)
+knitr::kable(df_r, "latex", booktabs = T, longtable = T)
+```
+
+```{python echo=FALSE}
+
+df = pd.DataFrame(myresult, columns=['nazwa_uslugi', 'ilosc'])
+
+max_ilosc = df['ilosc'].max()
+najpopularniejsze_uslugi = df[df['ilosc'] == max_ilosc]
+
+inne_popularne_uslugi = df[df['ilosc'] < max_ilosc][:3]
+inne_uslugi = list(inne_popularne_uslugi['nazwa_uslugi'])
+inne_uslugi_liczby = list(inne_popularne_uslugi['ilosc'])
+```
+Najbardziej popularna/e usługa/i to: `r py$najpopularniejsze_uslugi['nazwa_uslugi']` i została/y wynonana/e `r py$max_ilosc` razy. Dużą popularnością cieszą się również następujące usługi usługi: `r py$inne_uslugi` i zostały one wykonane odpowiednio `r py$inne_uslugi_liczby[1]`, `r py$inne_uslugi_liczby[2]`, `r py$inne_uslugi_liczby[3]` razy.
+\newpage
+
+## Jakie części są najczęściej używane podczas napraw?
+
+Wyżej pisaliśmy również, że do wykonywania poszczególnych usług używany różnorodnych części, do wykonania wszystkich napraw potrzebujemy w sumie 75 różnych narzędzi. Poniżej sporządziliśmy ranking tych, które są najczęściej używane przez pracowników warsztatu.
+
+```{python echo=FALSE}
+mycursor = con.cursor()
+mycursor.execute('''SELECT Czesci.nazwa_czesci, COUNT(Uslugi_Napraw.id) as ilosc
+                FROM Czesci INNER JOIN Uslugi_Czesci ON Czesci.id = Uslugi_Czesci.id_czesci
+                INNER JOIN Uslugi ON Uslugi_Czesci.id_uslugi = Uslugi.id
+                INNER JOIN Uslugi_Napraw ON Uslugi.id = Uslugi_Napraw.id_uslugi
+                GROUP BY Czesci.nazwa_czesci
+                ORDER BY ilosc DESC;''')
+
+myresult=mycursor.fetchall()
+
+columns = ["Nazwa części", "Ilość użyć"]
+df = pd.DataFrame(myresult, columns=columns)
+```
+
+```{r echo = FALSE}
+df_r <- as.data.frame(py$df)
+knitr::kable(df_r, "latex", booktabs = T, longtable = T)
+```
+
+```{python echo=FALSE}
+df = pd.DataFrame(myresult, columns=['nazwa_części', 'ilosc'])
+
+max_ilosc = df['ilosc'].max()
+najpopularniejsze_czesci = df[df['ilosc'] == max_ilosc]
+
+inne_popularne_czesci = df[df['ilosc'] < max_ilosc][:3]
+inne_czesci = list(inne_popularne_czesci['nazwa_części'])
+inne_czesci_liczba = inne_popularne_czesci['ilosc']
+```
+Część, która jest absolutnie niezbędna w naprawach to `r py$najpopularniejsze_czesci['nazwa_części']` z ilością użyć równą `r py$max_ilosc`.
+Dodatkowo częściami, które również są niezwykle potrzebne do przeprowadzania napraw są: `r py$inne_czesci`, które zostały użyte odpowiednio `r py$inne_czesci_liczba[1]`, `r py$inne_czesci_liczba[2]`, `r py$inne_czesci_liczba[3]` razy.
+
+## Jaki jest średni stan i rok produkcji naprawianych pojazdów?
+
+Trafiające do nas pojazdy różnią się pod każdym możliwym względem. Naprawiamy i renomujemy pojazdy różnorodnych marek, nowoczesne oraz oldschool'owe samochody i motory. 
+
+```{python echo=FALSE}
+mycursor = con.cursor()
+mycursor.execute('''SELECT AVG(Naprawy_Pojazdy.rok_produkcji)
+                FROM Naprawy INNER JOIN Naprawy_Pojazdy ON Naprawy_Pojazdy.id = Naprawy.id_pojazdu;''')
+
+myresult=mycursor.fetchall()
+
+rok = round(myresult[0][0], 0)
+```
+
+```{python echo=FALSE}
+mycursor = con.cursor()
+mycursor.execute('''SELECT AVG(Naprawy_Pojazdy.stan)
+                FROM Naprawy INNER JOIN Naprawy_Pojazdy ON Naprawy_Pojazdy.id = Naprawy.id_pojazdu;''')
+
+myresult=mycursor.fetchall()
+stan = round(myresult[0][0],1)
+```
+Naprawiane przez nas pojazdy średnio były wyprodukowane w `r py$rok` roku oraz są w stanie `r py$stan`, gdzie przyjeliśmy skalę oceny stanu od 1 do 5 oraz ocena 1 oznacza stan fatalny, a ocena 5 stan bardzo dobry.
+
+## Jaka jest średnia długość naprawy (w dniach) w zależności od ilości usług wykonywanych w obrębie tej naprawy?
+
+Naturalnym pytaniem, które stawiają klienci jest to, jaki czas jest potrzebny do wyremontowania ich pojazdów. Postanowiliśmy więc sprawdzić, jaki jest średni czas oczekiwania naszych klientów, w zależności od tego, ile usług zostało wykonanych, aby wyremontować ich pojazd.
+
+```{python echo=FALSE}
+mycursor = con.cursor()
+mycursor.execute('''CREATE OR REPLACE TEMPORARY TABLE `Dlugosc_naprawy_od_ilosci_uslug` AS
+                SELECT Naprawy.id as id, COUNT(Uslugi_Napraw.id_naprawy) as ilosc_napraw, -DATEDIFF(Naprawy.data_rozpoczecia, Naprawy.data_zakonczenia) as dlugosc
+                FROM Naprawy INNER JOIN Uslugi_Napraw ON Uslugi_Napraw.id_naprawy = Naprawy.id
+                GROUP BY id;''')
+
+mycursor.execute('''SELECT ilosc_napraw, AVG(dlugosc)
+                FROM Dlugosc_naprawy_od_ilosci_uslug
+                WHERE dlugosc IS NOT NULL
+                GROUP BY ilosc_napraw;''')
+myresult=mycursor.fetchall()
+
+columns = ["Ilość wykonanych usług", "Średnia długość naprawy"]
+df = pd.DataFrame(myresult, columns=columns)
+df["Średnia długość naprawy"] = df["Średnia długość naprawy"].astype(float)
+```
+
+```{r echo = FALSE}
+df_r <- as.data.frame(py$df)
+knitr::kable(df_r, "latex", booktabs = T, longtable = T)
+```
+
+## Jaki jest średni wiek klientów warsztatu?
+
+```{python echo=FALSE}
+mycursor = con.cursor()
+mycursor.execute('SELECT data_urodzenia FROM Klienci')
+
+myresult = mycursor.fetchall()
+
+def calculate_age(born):
+    today = date.today()
+    return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+
+df = pd.DataFrame(myresult, columns=['data_urodzenia'])
+df['age'] = df['data_urodzenia'].apply(calculate_age)
+
+average_age = df['age'].mean()
+
+binss = np.arange(17, 83, 5) 
+
+plt.figure(figsize=(12, 6))
+sns.histplot(df['age'], bins=binss, color='b', alpha=0.5) #kde=True
+plt.axvline(average_age, color='red', linestyle='--', linewidth=2, label=f'Średni wiek w latach: {average_age:.2f}')
+plt.xlabel('Wiek')
+plt.ylabel('Częstotliwość')
+plt.title('Rozkład wieku klientów')
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+heights, bins = np.histogram(df['age'], bins=binss)
+
+# Sortujemy indeksy listy według wartości, a następnie bierzemy trzy największe
+trzy_najwieksze_indeksy = sorted(range(len(heights)), key=lambda i: heights[i], reverse=True)[:3]
+```
+
+```{python echo=FALSE}
+heights, bins = np.histogram(df['age'], bins=binss)
+
+# Sortujemy indeksy listy według wartości, a następnie bierzemy trzy największe
+trzy_najwieksze_indeksy = sorted(range(len(heights)), key=lambda i: heights[i], reverse=True)[:3]
+
+bins_start = []
+bins_end = []
+for i in trzy_najwieksze_indeksy:
+    bins_start.append(int(bins[i]))
+    bins_end.append(int(bins[i+1]))
+```
+Jak możemy zauważyć nasz warsztat cieszy się największą popularnością wśród klientów w poniższych grupach wiekowych:
+
+1. `r py$bins_start[1]` - `r py$bins_end[1]`
+
+2. `r py$bins_start[2]` - `r py$bins_end[2]`
+
+3. `r py$bins_start[3]` - `r py$bins_end[3]`
+
+
+# Analiza finansowa
+
+W tej części raportu przeanalizujemy sytuację finansową naszego warsztatu. Przyjrzymy się pensjom pracowników, kosztom wynikającym z zakupu pojazdów i ich renowacji oraz zyskom ze sprzedaży i napraw.
+
+## Wynagrodzenia pracowników
+
+```{python echo = FALSE}
+mycursor = con.cursor()
+mycursor.execute('SELECT COUNT(*) FROM Pracownicy')
+
+liczba_pracownikow = mycursor.fetchone()[0]
+
+```
+W zakładzie jest zatrudnionych `r py$liczba_pracownikow` pracowników. Na poniższym histogramie możemy zaobserwować rozkład ich miesięcznych wynagrodzeń.
+
+```{python echo = FALSE}
+mycursor = con.cursor()
+mycursor.execute("SELECT pensja FROM Pracownicy")
+salary_results = mycursor.fetchall()
+monthly_salaries = np.array([salary[0] for salary in salary_results])/12
+
+plt.figure(figsize=(12, 6))
+plt.title("Histogram miesięcznych wynagrodzeń pracowników")
+plt.xlabel("Wynagrodzenie")
+plt.ylabel("Ilość pracowników")
+sns.histplot(monthly_salaries, color = 'b', bins =10, alpha=0.5)
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+suma_wynagrodzen = np.round(np.sum(monthly_salaries), decimals = 2)
+srednia_wynagrodzen = np.round(np.mean(monthly_salaries), decimals = 2)
+```
+
+Suma miesięcznych wynagrodzeń wszystkich zatrudnionych wynosi w przybliżeniu `r py$suma_wynagrodzen` USD. Natomiast średnia miesięczna pensja w naszym zakładzie to `r py$srednia_wynagrodzen` USD.
+
+\newpage
+
+## Naprawy
+
+Zyski pochodzące z serwisu i naprawy pojazdów zostały przedstawione na poniższym wykresie. Dana naprawa jest uwzględniana w miesiącu, w którym została opłacona, czyli w dniu jej zakończenia i odebrania przez klienta.
+
+```{python echo = FALSE}
+mycursor = con.cursor()
+
+mycursor.execute("SELECT DATE_FORMAT(Naprawy.data_zakonczenia, '%Y-%m') AS miesiac_rok, SUM(Uslugi_Napraw.koszt_uslugi) AS suma FROM Uslugi_Napraw JOIN Naprawy ON Uslugi_Napraw.id_naprawy = Naprawy.id WHERE DATE_FORMAT(Naprawy.data_zakonczenia, '%Y-%m') IS NOT NULL GROUP BY DATE_FORMAT(Naprawy.data_zakonczenia, '%Y-%m');")
+naprawy_monthly = mycursor.fetchall()
+
+mycursor.execute("SELECT SUM(Uslugi_Napraw.koszt_uslugi) AS suma FROM Uslugi_Napraw JOIN Naprawy ON Uslugi_Napraw.id_naprawy = Naprawy.id WHERE DATE_FORMAT(Naprawy.data_zakonczenia, '%Y-%m') IS NULL GROUP BY DATE_FORMAT(Naprawy.data_zakonczenia, '%Y-%m');")
+naprawy_current_month = mycursor.fetchone()[0]
+
+naprawy_months = [row[0] for row in naprawy_monthly]
+naprawy_monthly_income = np.array([row[1] for row in naprawy_monthly])
+
+
+fig, ax = plt.subplots(figsize=(10, 5))
+ax.plot(naprawy_months, naprawy_monthly_income, marker='o')
+ax.set_xlabel('Rok-Miesiąc')
+ax.set_ylabel('Zysk z napraw')
+ax.set_title('Miesięczne zyski z napraw')
+ax.set_xticklabels(naprawy_months, rotation=45)
+ax.grid(True)
+fig.tight_layout()
+plt.show()
+```
+
+Na wykresie przedstawione są jedynie dane dla zakończonych i opłaconych napraw. Naprawy pojazdów, które są aktualnie w trakcie realizacji zostały wycenione na `r py$naprawy_current_month` USD.
+
+
+## Skup, renowacje i sprzedaż
+
+Jak już zostało to wspomniane przy "najlepszych okazjach" - nasz warsztat skupuje pojazdy, żeby po wykonaniu renowacji, przedać je z zyskiem. Na poniższych wykresach zostały zamieszczone kolejno: miesięczne wydatki warsztatu na kupno pojazdów do renowacji, miesięczne koszty poniesione w wyniku wykonywanych renowacji oraz zyski z samochodów sprzedanych w poszczególnych miesiącach.
+
+```{python echo = FALSE}
+mycursor = con.cursor()
+mycursor.execute("SELECT DATE_FORMAT(data, '%Y-%m') AS miesiac_rok, SUM(kwota) AS suma FROM Kupno_Sprzedaz WHERE (typ = 'kupno') GROUP BY DATE_FORMAT(data, '%Y-%m')")
+kupno_monthly = mycursor.fetchall()
+
+kupno_months = [row[0] for row in kupno_monthly]
+kupno_monthly_outcome = np.array([row[1] for row in kupno_monthly])
+
+
+fig, ax = plt.subplots(figsize=(10, 5))
+ax.plot(kupno_months, kupno_monthly_outcome, marker='o')
+ax.set_xlabel('Rok-Miesiąc')
+ax.set_ylabel('Wydatki na kupno')
+ax.set_title('Miesięczne wydatki na kupno')
+ax.set_xticklabels(kupno_months, rotation=45)
+ax.grid(True)
+fig.tight_layout()
+plt.show()
+```
+
+
+```{python echo = FALSE}
+mycursor = con.cursor()
+mycursor.execute("SELECT DATE_FORMAT(Renowacje.data_zakonczenia, '%Y-%m') AS miesiac_rok, SUM(Uslugi_Renowacji.koszt_uslugi) AS suma FROM Uslugi_Renowacji JOIN Renowacje ON Uslugi_Renowacji.id_renowacji = Renowacje.id WHERE DATE_FORMAT(Renowacje.data_zakonczenia, '%Y-%m') IS NOT NULL GROUP BY DATE_FORMAT(Renowacje.data_zakonczenia, '%Y-%m');")
+renowacje_monthly = mycursor.fetchall()
+
+mycursor.execute("SELECT SUM(Uslugi_Renowacji.koszt_uslugi) AS suma FROM Uslugi_Renowacji JOIN Renowacje ON Uslugi_Renowacji.id_renowacji = Renowacje.id WHERE DATE_FORMAT(Renowacje.data_zakonczenia, '%Y-%m') IS NULL GROUP BY DATE_FORMAT(Renowacje.data_zakonczenia, '%Y-%m');")
+renowacje_current_month = mycursor.fetchone()[0]
+
+renowacje_months = [row[0] for row in renowacje_monthly]
+renowacje_monthly_outcome = np.array([row[1] for row in renowacje_monthly])
+
+fig, ax = plt.subplots(figsize=(10, 5))
+ax.plot(renowacje_months, renowacje_monthly_outcome, marker='o')
+ax.set_xlabel('Rok-Miesiąc')
+ax.set_ylabel('Zysk z napraw')
+ax.set_title('Miesięczne straty z renowacji')
+ax.set_xticklabels(renowacje_months, rotation=45)
+ax.grid(True)
+fig.tight_layout()
+plt.show()
+```
+
+Uwzględnione renowacje dotyczą tylko samochodów, które zostały już sprzedane. Naliczone koszty za trwające renowacje wynoszą `r py$renowacje_current_month` USD.
+
+```{python echo = FALSE}
+mycursor = con.cursor()
+mycursor.execute("SELECT DATE_FORMAT(data, '%Y-%m') AS miesiac_rok, SUM(kwota) AS suma FROM Kupno_Sprzedaz WHERE (typ = 'sprzedaz') GROUP BY DATE_FORMAT(data, '%Y-%m')")
+sprzedaz_monthly = mycursor.fetchall()
+
+sprzedaz_months = [row[0] for row in sprzedaz_monthly]
+sprzedaz_monthly_income = np.array([row[1] for row in sprzedaz_monthly])
+
+fig, ax = plt.subplots(figsize=(10, 5))
+ax.plot(sprzedaz_months, sprzedaz_monthly_income, marker='o')
+ax.set_xlabel('Rok-Miesiąc')
+ax.set_ylabel('Zyski ze sprzedaży')
+ax.set_title('Miesięczne zyski ze sprzedaży')
+ax.set_xticklabels(sprzedaz_months, rotation=45)
+ax.grid(True)
+fig.tight_layout()
+plt.show()
+```
+\newpage
+
+## Miesięczny bilans
+
+Ostatecznie wyznaczyliśmy miesięczny dochód warsztatu na podstawie powyższych danych. Rezultaty znajdują się na poniższym wykresie.
+
+```{python echo = FALSE}
+mycursor = con.cursor()
+all_months = sorted(set(naprawy_months + renowacje_months + sprzedaz_months + kupno_months))
+
+def get_full_series(months, values, all_months):
+    full_series = []
+    value_dict = dict(zip(months, values))
+    for month in all_months:
+        full_series.append(float(value_dict.get(month, 0)))
+    return np.array(full_series)
+
+naprawy_full = get_full_series(naprawy_months, naprawy_monthly_income, all_months)
+renowacje_full = get_full_series(renowacje_months, renowacje_monthly_outcome, all_months)
+sprzedaz_full = get_full_series(sprzedaz_months, sprzedaz_monthly_income, all_months)
+kupno_full = get_full_series(kupno_months, kupno_monthly_outcome, all_months)
+
+salaries = np.array([np.sum(monthly_salaries) for i in range(len(kupno_full))])
+monthly_asset = sprzedaz_full + naprawy_full - renowacje_full - kupno_full - salaries
+
+
+fig, ax = plt.subplots(figsize=(10, 5))
+ax.plot(all_months, monthly_asset, marker='o')
+ax.set_xlabel('Rok-Miesiąc')
+ax.set_ylabel('Bilans')
+ax.set_title('Miesięczny bilans')
+ax.set_xticklabels(all_months, rotation=45)
+ax.grid(True)
+fig.tight_layout()
+plt.show()
+
+suma = np.round(np.sum(monthly_asset), decimals = 2)
+```
+
+Ostatecznie dochód naszego warsztatu uzyskany na przestrzeni lat jego działania wynosi `r py$suma` USD.
+
+
+```{python echo = FALSE, message = FALSE, results = FALSE}
+mycursor.close()
+con.close()
+```
+
