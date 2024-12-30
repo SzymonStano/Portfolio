@@ -35,9 +35,11 @@ $$
 
 4. **Constructing the Loss Function**:  
    A custom loss function is built based on the residual of the ODE and its initial condition. During training, the neural network minimizes the squared residual over a set of training points, thus satisfying the given differential equation:  
+
 $$
 \text{Loss} = \frac{1}{N} \sum_{i=1}^{N} (\text{Residual}(t_i, y_i))^2 + (y(0)-1)^2.
 $$
+
 
 5. **Training the Neural Network**:  
    The model is trained using different activation functions (`tanh` and `ReLU`) to compare their performance in approximating the solution.
