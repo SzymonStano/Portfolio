@@ -67,3 +67,8 @@ $$
 - The `tanh` model demonstrated better performance with lower MSE and absolute tolerance, making it more effective for solving ODEs.
 - Automatic differentiation allowed precise computation of derivatives, contributing to the accuracy of the residual evaluation and overall model performance, but might not be suitable for higher-order ODEs.
 
+## Future Plans
+
+- Extend the methodology to solve higher-order ODEs by modifying the neural network model to handle the additional complexity.
+- Investigate the solution of systems of ODEs using neural networks by adapting the approach to handle multiple coupled equations.
+- Compare the neural network-based solutions with traditional numerical methods, such as finite difference or Runge-Kutta methods, to evaluate the efficiency, accuracy, and potential advantages of using neural networks for solving ODEs.
