@@ -1,0 +1,49 @@
+# Pliki systemowe
+.DS_Store
+Thumbs.db
+
+# Katalogi środowisk IDE
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Kompilacje / pliki binarne
+*.exe
+*.dll
+*.out
+*.obj
+*.class
+*.pyc
+*.pyo
+*.log
+
+# Foldery tymczasowe
+tmp/
+temp/
+.cache/
+dist/
+build/
+node_modules/
+
+# Środowiska wirtualne
+venv/
+.env
+.env.*
+
+# Pliki backupu/edycyjne
+*~
+*.swp
+*.bak
+
+# Archiwa
+*.zip
+*.tar
+*.gz
+*.rar
+*.7z
+
+Graphs/
+Game prototype/
