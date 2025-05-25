@@ -1,5 +1,7 @@
 # Neural Network Solution for an Ordinary Differential Equation
 
+*This repository presents an early standalone version of a broader engineering thesis project. The full version is available as `Neural_Networks_in_solving_Ordinary_Differential_Equations.pdf`.*
+
 This project demonstrates the use of neural networks to approximate the solution to a first-order ordinary differential equation (ODE):
 
 $$
@@ -13,7 +15,7 @@ The exact analytical solution of this ODE is
 $$y = e^{-t}$$.
 
 ## Methodology
-*This methodology can be applied to any ODE in residual form.*
+*This methodology can be applied to any ODE in residual form, as further explored in my engineering thesis.*
 
 
 The neural network approach involves the following steps:
